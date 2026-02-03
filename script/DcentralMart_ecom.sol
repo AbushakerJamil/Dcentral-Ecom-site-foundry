@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity ^0.8.26;
 
-contract DcentraclMart {
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+contract DcentraclMart is ReentrancyGuard, Ownable {
     ///////////////////
     // Errors
     ///////////////////
@@ -14,6 +17,19 @@ contract DcentraclMart {
     error InvalidQuantity();
     error ProductNotFound();
     error NotProductOwner();
+    error CannotBuyOwnProduct();
+    error InsufficientStock();
+    error IncorrectPayment();
+    error OrderNotFound();
+    error ProductNotActive();
+    error NotTheBuyer();
+    error InvalidOrderStatus();
+    error TransferFailed();
+    error NothingToWithdraw();
+
+    ///////////////////
+    // Event
+    ///////////////////
 
     event OrderPlaced(
         uint256 indexed orderId,
@@ -23,6 +39,22 @@ contract DcentraclMart {
         uint256 quantity,
         uint256 totalPrice
     );
+
+    event SellerRegistered(address indexed seller, string shopName, uint256 timestamp);
+
+    event SellerUpdate(address indexed seller, string shopName, uint256 timestamp);
+
+    event ProductListed(
+        uint256 indexed productId, address indexed seller, string name, uint256 price, uint256 quantity
+    );
+
+    event ProductUpdated(uint256 indexed productId, uint256 price, uint256 quantity, bool isActive);
+
+    event OrderStatusChanged(uint256 indexed orderId, OrderStatus oldStatus, OrderStatus newStatus, uint256 timestamp);
+
+    event EarningsWithdrawn(address indexed seller, uint256 amount, uint256 timestamp);
+
+    event DeliveryConfirmed(uint256 indexed orderId, address indexed buyer, uint256 timestamp);
 
     ///////////////////
     // Errors
@@ -102,6 +134,7 @@ contract DcentraclMart {
     mapping(uint256 => OrderStruct) private orderMap;
     mapping(address => uint256[]) private buyerOrders;
     mapping(address => uint256[]) private sellerOrders;
+    mapping(address => uint256[]) public sellerProduct;
 
     ///////////////////
     // modifier
@@ -114,7 +147,25 @@ contract DcentraclMart {
         _;
     }
 
-    constructor(uint256 _platformFee) {
+    modifier validOrder(uint256 orderId) {
+        if (orderId == 0 || orderId > ordderIdCount) {
+            revert OrderNotFound();
+        }
+        _;
+    }
+
+    modifier validProduct(uint256 productId) {
+        if (productId == 0 || productId > productIdCounter) {
+            revert ProductNotFound();
+        }
+
+        if (!productMap[productId].isActive) {
+            revert ProductNotActive();
+        }
+        _;
+    }
+
+    constructor(uint256 _platformFee) Ownable(msg.sender) {
         platformFeePercent = _platformFee;
     }
 
@@ -140,6 +191,8 @@ contract DcentraclMart {
             isActive: true,
             registeredAt: block.timestamp
         });
+
+        emit SellerRegistered(msg.sender, _shopeName, block.timestamp);
     }
 
     function listProduct(
@@ -177,6 +230,10 @@ contract DcentraclMart {
             updatedAt: block.timestamp
         });
 
+        sellerProduct[msg.sender].push(productId);
+
+        emit ProductListed(productId, msg.sender, name, price, quantity);
+
         return productId;
     }
 
@@ -199,21 +256,39 @@ contract DcentraclMart {
         newProduct.quantity = quantity;
         newProduct.isActive = isActive;
         newProduct.updatedAt = block.timestamp;
+
+        emit ProductUpdated(productId, price, quantity, isActive);
     }
 
-    function purchaseProduct(uint256 productId, uint256 quantity) external returns (uint256 orderId) {
+    function purchaseProduct(uint256 productId, uint256 quantity)
+        external
+        payable
+        validProduct(productId)
+        nonReentrant
+        returns (uint256 orderId)
+    {
         ProductStruct storage newProduct = productMap[productId];
 
+        if (newProduct.seller == msg.sender) {
+            revert CannotBuyOwnProduct();
+        }
+
+        if (quantity == 0) {
+            revert InvalidQuantity();
+        }
+
+        if (newProduct.quantity < quantity) {
+            revert InsufficientStock();
+        }
+
         uint256 totalPrice = newProduct.price * quantity;
+        if (msg.value != totalPrice) {
+            revert IncorrectPayment();
+        }
 
         ordderIdCount++;
         orderId = ordderIdCount;
         newProduct.quantity -= quantity;
-
-        uint256 platformFee = (totalPrice * platformFeePercent) / 10000;
-        uint256 sellerAmount = totalPrice - platformFee;
-
-        platformErnings += platformFee;
 
         orderMap[orderId] = OrderStruct({
             id: orderId,
@@ -228,14 +303,54 @@ contract DcentraclMart {
             updatedAt: block.timestamp
         });
 
-        (bool success,) = payable(newProduct.seller).call{value: sellerAmount}("");
-        require(success, "Transfer failed");
-
         buyerOrders[msg.sender].push(orderId);
-        sellerOrders[msg.sender].push(orderId);
+        sellerOrders[newProduct.seller].push(orderId);
 
         emit OrderPlaced(orderId, productId, msg.sender, newProduct.seller, quantity, totalPrice);
 
         return orderId;
+    }
+
+    function confirmDelivery(uint256 orderId) external validOrder(orderId) nonReentrant {
+        OrderStruct storage order = orderMap[orderId];
+
+        if (order.buyer != msg.sender) {
+            revert NotTheBuyer();
+        }
+
+        if (order.status != OrderStatus.Shipped) {
+            revert InvalidOrderStatus();
+        }
+
+        OrderStatus oldStatus = order.status;
+        order.status = OrderStatus.Delivered;
+        order.updatedAt = block.timestamp;
+
+        uint256 platformFee = (order.totalPrice * platformFeePercent) / 10000;
+        uint256 sellerAmount = order.totalPrice - platformFee;
+
+        platformErnings += platformFee;
+
+        sellerMap[order.seller].earnings += sellerAmount;
+        sellerMap[order.seller].totalSales++;
+
+        emit OrderStatusChanged(orderId, oldStatus, OrderStatus.Delivered, block.timestamp);
+
+        emit DeliveryConfirmed(orderId, msg.sender, block.timestamp);
+    }
+
+    function withdrawEarnings() external onlySeller nonReentrant {
+        uint256 amount = sellerMap[msg.sender].earnings;
+        sellerMap[msg.sender].earnings = 0;
+        if (amount == 0) {
+            revert NothingToWithdraw();
+        }
+
+        (bool success,) = payable(msg.sender).call{value: amount}("");
+
+        if (!success) {
+            revert TransferFailed();
+        }
+        emit EarningsWithdrawn(msg.sender, amount, block.timestamp);
     }
 }
