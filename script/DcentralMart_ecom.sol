@@ -26,6 +26,11 @@ contract DcentraclMart is ReentrancyGuard, Ownable {
     error InvalidOrderStatus();
     error TransferFailed();
     error NothingToWithdraw();
+    error EmptyString();
+    error DisputeAlreadyExists();
+    error OrderNotDisputable();
+    error Unauthorized();
+    error NotTheOrderSeller();
 
     ///////////////////
     // Event
@@ -55,6 +60,12 @@ contract DcentraclMart is ReentrancyGuard, Ownable {
     event EarningsWithdrawn(address indexed seller, uint256 amount, uint256 timestamp);
 
     event DeliveryConfirmed(uint256 indexed orderId, address indexed buyer, uint256 timestamp);
+
+    event RefundRequest(uint256 indexed orderId, address indexed buyer, string reason, uint256 timestamp);
+
+    event RefundProcessed(uint256 indexed orderId, address indexed buyer, uint256 amount, uint256 timestamp);
+
+    event DisputeRaised(uint256 indexed orderId, address indexed complaint, string description, uint256 timestamp);
 
     ///////////////////
     // Errors
@@ -125,6 +136,15 @@ contract DcentraclMart is ReentrancyGuard, Ownable {
         uint256 updatedAt;
     }
 
+    struct Dispute {
+        uint256 orderId;
+        address complainant;
+        string description;
+        DisputeStatus status;
+        uint256 createdAt;
+        uint256 resolvedAt;
+    }
+
     ///////////////////
     // mapping
     ///////////////////
@@ -135,6 +155,7 @@ contract DcentraclMart is ReentrancyGuard, Ownable {
     mapping(address => uint256[]) private buyerOrders;
     mapping(address => uint256[]) private sellerOrders;
     mapping(address => uint256[]) public sellerProduct;
+    mapping(uint256 => Dispute) public disputes;
 
     ///////////////////
     // modifier
@@ -352,5 +373,114 @@ contract DcentraclMart is ReentrancyGuard, Ownable {
             revert TransferFailed();
         }
         emit EarningsWithdrawn(msg.sender, amount, block.timestamp);
+    }
+
+    function requestRefund(uint256 orderId, string memory reason) external validOrder(orderId) {
+        OrderStruct storage order = orderMap[orderId];
+
+        if (order.buyer != msg.sender) {
+            revert NotTheBuyer();
+        }
+
+        if (order.status != OrderStatus.Pending) {
+            revert InvalidOrderStatus();
+        }
+
+        if (bytes(reason).length == 0) {
+            revert EmptyString();
+        }
+        emit RefundRequest(orderId, msg.sender, reason, block.timestamp);
+    }
+
+    function raiseDispute(uint256 orderId, string calldata description) external {
+        OrderStruct storage order = orderMap[orderId];
+
+        if (order.buyer != msg.sender && order.seller != msg.sender) {
+            revert Unauthorized();
+        }
+
+        if (
+            order.status == OrderStatus.Delivered || order.status == OrderStatus.Cancelled
+                || order.status == OrderStatus.Refunded
+        ) {
+            revert OrderNotDisputable();
+        }
+
+        if (order.disputeStatus != DisputeStatus.None) {
+            revert DisputeAlreadyExists();
+        }
+
+        if (bytes(description).length == 0) {
+            revert EmptyString();
+        }
+
+        order.status = OrderStatus.Disputed;
+        order.disputeStatus = DisputeStatus.Open;
+        order.updatedAt = block.timestamp;
+
+        disputes[orderId] = Dispute({
+            orderId: orderId,
+            complainant: msg.sender,
+            description: description,
+            status: DisputeStatus.Open,
+            createdAt: block.timestamp,
+            resolvedAt: 0
+        });
+
+        emit DisputeRaised(orderId, msg.sender, description, block.timestamp);
+    }
+
+    function updatePlatformFee(uint256 newFeePercent) external onlyOwner {
+        platformFeePercent = newFeePercent;
+    }
+
+    function withdrawPlatformFees() external onlyOwner nonReentrant {
+        uint256 amount = platformErnings;
+
+        if (amount == 0) {
+            revert NothingToWithdraw();
+        }
+        platformErnings = 0;
+
+        (bool success,) = payable(owner()).call{value: amount}("");
+
+        if (!success) {
+            revert TransferFailed();
+        }
+    }
+
+    function markAsShipped(uint256 orderId) external validOrder(orderId) {
+        OrderStruct storage order = orderMap[orderId];
+
+        if (order.seller != msg.sender) {
+            revert NotTheOrderSeller();
+        }
+
+        if (order.status != OrderStatus.Pending) {
+            revert InvalidOrderStatus();
+        }
+
+        OrderStatus oldStatus = order.status;
+        order.status = OrderStatus.Shipped;
+        order.updatedAt = block.timestamp;
+
+        order.status = OrderStatus.Shipped;
+        emit OrderStatusChanged(orderId, oldStatus, OrderStatus.Shipped, block.timestamp);
+    }
+
+    function getTotalProducts() external view returns (uint256) {
+        return productIdCounter;
+    }
+
+    function getTotalOrders() external view returns (uint256) {
+        return ordderIdCount;
+    }
+
+    function getSellerProductIds(address seller) external view returns (uint256[] memory) {
+        return sellerProduct[seller];
+    }
+
+    function getBuyerOrderIds(address buyer) external view returns (uint256[] memory) {
+        return buyerOrders[buyer];
     }
 }
