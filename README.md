@@ -227,19 +227,6 @@ Contributions are welcome! Please follow these steps:
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## Security
-
-If you discover a security vulnerability, please email [security@example.com] instead of using the issue tracker.
-
-## License
-
-This project is licensed under the terms specified in the LICENSE file.
-
-## Contact
-
-- Project Link: [https://github.com/yourusername/dcentraclmart]
-- Documentation: [Link to docs]
-- Support: [support@example.com]
 
 ## Acknowledgments
 
@@ -249,4 +236,3 @@ This project is licensed under the terms specified in the LICENSE file.
 
 ---
 
-**Disclaimer**: This smart contract is provided as-is. Always conduct thorough testing and audits before deploying to mainnet.
