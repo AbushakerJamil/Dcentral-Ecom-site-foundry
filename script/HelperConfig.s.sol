@@ -1,65 +1,59 @@
-// // SPDX-License-Identifier: MIT
-// pragma solidity ^0.8.19;
+// SPDX-License-Identifier: SEE LICENSE IN LICENSE
+// script/HelperConfig.s.sol
+pragma solidity ^0.8.26;
 
-// import {Script, console2} from "forge-std/Script.sol";
+import {Script} from "forge-std/Script.sol";
 
-// abstract contract CodeConstants {
-//     /*//////////////////////////////////////////////////////////////
-//                                CHAIN IDS
-//     //////////////////////////////////////////////////////////////*/
-//     uint256 public constant ETH_SEPOLIA_CHAIN_ID = 11155111;
-//     uint256 public constant ZKSYNC_SEPOLIA_CHAIN_ID = 300;
-//     uint256 public constant LOCAL_CHAIN_ID = 31337;
-// }
+contract HelperConfig is Script {
+    error HelperConfig__InvalidChainId();
 
-// contract HelperConfig is CodeConstants, Script {
-//     /*//////////////////////////////////////////////////////////////
-//                                  ERRORS
-//     //////////////////////////////////////////////////////////////*/
-//     error HelperConfig__InvalidChainId();
+    struct NetworkConfig {
+        uint256 platformFeePercent;
+        address account;
+    }
 
-//     /*//////////////////////////////////////////////////////////////
-//                                  TYPES
-//     //////////////////////////////////////////////////////////////*/
-//     struct NetworkConfig {
-//     }
+    uint256 public constant DEFAULT_ANVIL_PRIVATE_KEY = 0;
+ 
+    uint256 public constant ETH_MAINNET_CHAIN_ID = 1;
+    uint256 public constant ETH_SEPOLIA_CHAIN_ID = 11155111;
+    uint256 public constant LOCAL_CHAIN_ID = 31337;
 
-//     /*//////////////////////////////////////////////////////////////
-//                             STATE VARIABLES
-//     //////////////////////////////////////////////////////////////*/
-//     // Local network state variables
-//     NetworkConfig public localNetworkConfig;
-//     mapping(uint256 chainId => NetworkConfig) public networkConfigs;
+    NetworkConfig public activeNetworkConfig;
 
-//     /*//////////////////////////////////////////////////////////////
-//                                FUNCTIONS
-//     //////////////////////////////////////////////////////////////*/
-//     constructor() {
-//         networkConfigs[ETH_SEPOLIA_CHAIN_ID] = getSepoliaEthConfig();
-//         networkConfigs[ZKSYNC_SEPOLIA_CHAIN_ID] = getZkSyncSepoliaConfig();
-//         // Note: We skip doing the local config
-//     }
+    mapping(uint256 => NetworkConfig) public networkConfigs;
 
-//     function getConfigByChainId(uint256 chainId) public returns (NetworkConfig memory) {
+    constructor() {
+        networkConfigs[ETH_MAINNET_CHAIN_ID] = getMainnetConfig();
+        networkConfigs[ETH_SEPOLIA_CHAIN_ID] = getSepoliaConfig();
+        activeNetworkConfig = getConfigByChainId(block.chainid);
+    }
 
-//     }
+    function getConfigByChainId(uint256 chainId) public returns (NetworkConfig memory) {
+        if (chainId == LOCAL_CHAIN_ID) {
+            return getOrCreateAnvilConfig();
+        } else if (networkConfigs[chainId].account != address(0)) {
+            return networkConfigs[chainId];
+        } else {
+            revert HelperConfig__InvalidChainId();
+        }
+    }
 
-//     /*//////////////////////////////////////////////////////////////
-//                                 CONFIGS
-//     //////////////////////////////////////////////////////////////*/
-//     function getSepoliaEthConfig() public pure returns (NetworkConfig memory) {
+    function getMainnetConfig() public view returns (NetworkConfig memory) {
+        return NetworkConfig({platformFeePercent: 250, account: msg.sender});
+    }
 
-//     }
+    function getSepoliaConfig() public view returns (NetworkConfig memory) {
+        return NetworkConfig({platformFeePercent: 250, account: msg.sender});
+    }
 
-//     function getZkSyncSepoliaConfig() public pure returns (NetworkConfig memory) {
+    function getOrCreateAnvilConfig() public returns (NetworkConfig memory) {
+        if (activeNetworkConfig.account != address(0)) {
+            return activeNetworkConfig;
+        }
 
-//     }
+        NetworkConfig memory anvilConfig =
+            NetworkConfig({platformFeePercent: 250, account: vm.addr(DEFAULT_ANVIL_PRIVATE_KEY)});
 
-//     /*//////////////////////////////////////////////////////////////
-//                               LOCAL CONFIG
-//     //////////////////////////////////////////////////////////////*/
-//     function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
-//         // Check to see if we set an active network config
-
-//     }
-// }
+        return anvilConfig;
+    }
+}

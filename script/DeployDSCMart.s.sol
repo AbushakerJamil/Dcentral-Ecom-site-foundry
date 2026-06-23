@@ -1,22 +1,25 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.19;
+// SPDX-License-Identifier: SEE LICENSE IN LICENSE
+// script/DeployDcentraclMart.s.sol
+pragma solidity ^0.8.26;
 
-import {Script} from "forge-std/Script.sol";
+import {Script, console} from "forge-std/Script.sol";
+import {DcentraclMart} from "../src/DcentraclMart.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
-import {FundMe} from "../src/FundMe.sol";
 
-contract DeployFundMe is Script {
-    function deployFundMe() public returns (FundMe, HelperConfig) {
-        HelperConfig helperConfig = new HelperConfig(); // This comes with our mocks!
-        address priceFeed = helperConfig.getConfigByChainId(block.chainid).priceFeed;
+contract DeployDcentraclMart is Script {
+    function run() external returns (DcentraclMart, HelperConfig) {
+        HelperConfig helperConfig = new HelperConfig();
+        HelperConfig.NetworkConfig memory config = helperConfig.getConfigByChainId(block.chainid);
 
-        vm.startBroadcast();
-        FundMe fundMe = new FundMe(priceFeed);
+        vm.startBroadcast(config.account);
+
+        DcentraclMart dcentraclMart = new DcentraclMart(config.platformFeePercent);
+
         vm.stopBroadcast();
-        return (fundMe, helperConfig);
-    }
 
-    function run() external returns (FundMe, HelperConfig) {
-        return deployFundMe();
+        console.log("DcentraclMart deployed at:", address(dcentraclMart));
+        console.log("Platform fee (bps):", config.platformFeePercent);
+
+        return (dcentraclMart, helperConfig);
     }
 }
