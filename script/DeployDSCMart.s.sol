@@ -3,7 +3,7 @@
 pragma solidity ^0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
-import {DcentraclMart} from "../src/DcentraclMart.sol";
+import {DcentraclMart} from "../src/DcentralMart_ecom.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
 
 contract DeployDcentraclMart is Script {

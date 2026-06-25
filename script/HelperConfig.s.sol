@@ -12,8 +12,9 @@ contract HelperConfig is Script {
         address account;
     }
 
-    uint256 public constant DEFAULT_ANVIL_PRIVATE_KEY = 0;
- 
+    uint256 public constant DEFAULT_ANVIL_PRIVATE_KEY =
+        0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+
     uint256 public constant ETH_MAINNET_CHAIN_ID = 1;
     uint256 public constant ETH_SEPOLIA_CHAIN_ID = 11155111;
     uint256 public constant LOCAL_CHAIN_ID = 31337;
@@ -28,7 +29,7 @@ contract HelperConfig is Script {
         activeNetworkConfig = getConfigByChainId(block.chainid);
     }
 
-    function getConfigByChainId(uint256 chainId) public returns (NetworkConfig memory) {
+    function getConfigByChainId(uint256 chainId) public view returns (NetworkConfig memory) {
         if (chainId == LOCAL_CHAIN_ID) {
             return getOrCreateAnvilConfig();
         } else if (networkConfigs[chainId].account != address(0)) {
@@ -46,7 +47,7 @@ contract HelperConfig is Script {
         return NetworkConfig({platformFeePercent: 250, account: msg.sender});
     }
 
-    function getOrCreateAnvilConfig() public returns (NetworkConfig memory) {
+    function getOrCreateAnvilConfig() public view returns (NetworkConfig memory) {
         if (activeNetworkConfig.account != address(0)) {
             return activeNetworkConfig;
         }
