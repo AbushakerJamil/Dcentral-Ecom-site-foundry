@@ -44,43 +44,6 @@ DcentraclMart is a smart contract-based marketplace where sellers can list produ
   - `Ownable.sol` - Access control
   - `ReentrancyGuard.sol` - Protection against reentrancy attacks
 
-## Core Functions
-
-### Seller Functions
-
-```solidity
-registerSeller(string shopName, string description)
-listProduct(string name, string description, string category, uint256 price, uint256 quantity)
-updateProduct(uint256 productId, uint256 price, uint256 quantity, bool isActive)
-markAsShipped(uint256 orderId)
-withdrawEarnings()
-```
-
-### Buyer Functions
-
-```solidity
-purchaseProduct(uint256 productId, uint256 quantity) payable
-confirmDelivery(uint256 orderId)
-requestRefund(uint256 orderId, string reason)
-raiseDispute(uint256 orderId, string description)
-```
-
-### Admin Functions
-
-```solidity
-updatePlatformFee(uint256 newFeePercent)
-withdrawPlatformFees()
-```
-
-### View Functions
-
-```solidity
-getTotalProducts()
-getTotalOrders()
-getSellerProductIds(address seller)
-getBuyerOrderIds(address buyer)
-```
-
 ## Order Lifecycle
 
 1. **Pending** - Order placed, payment held in contract
@@ -217,7 +180,6 @@ await dcentraclMart.purchaseProduct(productId, 2, {
 - IPFS integration for product images
 - Advanced search and filtering
 
-
 ## Acknowledgments
 
 - OpenZeppelin for secure contract libraries
@@ -225,4 +187,3 @@ await dcentraclMart.purchaseProduct(productId, 2, {
 - Contributors and testers
 
 ---
-
